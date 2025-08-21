@@ -1,0 +1,1217 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Koto Paint</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            touch-action: none;
+            overflow: hidden;
+        }
+
+        /* アプリケーション全体のレイアウト */
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* トップバーのスタイル */
+        .top-bar {
+            background-color: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: flex-end; /* 右寄せに変更 */
+            align-items: center;
+            padding: 0.5rem 1rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            z-index: 100;
+        }
+        
+        /* ツール設定パネルのスタイル（トップバーの下に配置） */
+        .tool-panel {
+            position: absolute;
+            top: 4.5rem;
+            left: 50%;
+            transform: translateX(-50%) translateY(-10px); /* 初期位置を少し上に */
+            background-color: #ffffff;
+            border-radius: 1rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            padding: 1rem;
+            z-index: 40;
+            display: none;
+            max-height: 80vh;
+            overflow-y: auto;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+            pointer-events: none;
+        }
+        .tool-panel.active {
+            display: block;
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+            pointer-events: auto;
+        }
+
+        /* メインキャンバスエリア */
+        .canvas-area {
+            flex-grow: 1;
+            position: relative;
+            background-color: #ffffff; /* ペンと消しゴムの両方で背景色を白に設定 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            transition: background-color 0.3s ease;
+        }
+
+        /* 統合キャンバスのスタイル（境界線と影を追加） */
+        #merged-canvas {
+            border: 1px solid #999;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            border-radius: 0.5rem;
+        }
+        #merged-canvas, .canvas-layer {
+            transition: transform 0.1s ease-out;
+        }
+
+        /* レイヤーモーダルのスタイル */
+        .modal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0);
+            z-index: 100;
+            display: none;
+            transition: background-color 0.3s ease-in-out;
+        }
+        .modal-overlay.open {
+            display: block;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .layer-modal {
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            width: 90%;
+            max-width: 600px;
+            background-color: #ffffff;
+            border-radius: 1rem 1rem 0 0;
+            padding: 1rem;
+            box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.2);
+            z-index: 101;
+            transform: translateY(100%);
+            transition: transform 0.3s ease-in-out;
+        }
+        .layer-modal.open {
+            transform: translateY(0);
+        }
+
+        .layer-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.5rem;
+            background-color: #f3f4f6;
+            border-radius: 0.5rem;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .layer-item.active {
+            background-color: #e5e7eb;
+            outline: 2px solid #4f46e5;
+        }
+        
+        .layer-thumbnail {
+            width: 80px;
+            height: 80px;
+            border: 1px solid #ccc;
+            background-color: #fff;
+            margin-right: 0.5rem;
+        }
+
+        /* その他の汎用スタイル */
+        .btn-icon {
+            font-size: 1.5rem;
+            width: 2.5rem;
+            height: 2.5rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 0.5rem;
+            transition: background-color 0.2s, transform 0.2s;
+        }
+        .btn-icon:hover {
+            background-color: #e5e7eb;
+            transform: scale(1.05);
+        }
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+        .color-palette-item {
+            width: 2rem;
+            height: 2rem;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        }
+        .message-box {
+            position: absolute;
+            bottom: 1rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+            pointer-events: none;
+            z-index: 1000;
+        }
+        .message-box.show {
+            opacity: 1;
+        }
+        .top-tools {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .tool-group {
+            display: flex;
+            gap: 0.25rem;
+            background-color: #f3f4f6;
+            padding: 0.25rem;
+            border-radius: 0.75rem;
+        }
+        .tool-group .btn-icon {
+            font-size: 1.25rem;
+            width: 2.25rem;
+            height: 2.25rem;
+        }
+        .tool-group .btn-icon.active {
+            background-color: #e5e7eb;
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <!-- Top Bar -->
+    <div class="top-bar">
+        <!-- アプリ名を追加 -->
+        <h1 class="text-lg font-bold mr-4">Koto Paint</h1>
+        <!-- Add a div with flex-grow to center tool groups -->
+        <div class="flex-grow flex justify-center">
+            <div class="flex items-center gap-4 top-tools">
+                <!-- Drawing Tools -->
+                <div class="tool-group">
+                    <button id="tool-brush-btn" class="btn-icon active" data-tool="brush">
+                        <i class="fa-solid fa-paint-brush"></i>
+                    </button>
+                    <button id="tool-eraser-btn" class="btn-icon" data-tool="eraser">
+                        <i class="fa-solid fa-eraser"></i>
+                    </button>
+                    <button id="tool-fill-btn" class="btn-icon" data-tool="fill">
+                        <i class="fa-solid fa-fill-drip"></i>
+                    </button>
+                    <button id="tool-eyedropper-btn" class="btn-icon" data-tool="eyedropper">
+                        <i class="fa-solid fa-eye-dropper"></i>
+                    </button>
+                    <button id="tool-finger-btn" class="btn-icon" data-tool="finger">
+                        <i class="fa-solid fa-hand-pointer"></i>
+                    </button>
+                </div>
+                
+                <!-- Editing Tools -->
+                <div class="tool-group">
+                    <button id="undo-btn" class="btn-icon">
+                        <i class="fa-solid fa-undo"></i>
+                    </button>
+                    <button id="redo-btn" class="btn-icon">
+                        <i class="fa-solid fa-redo"></i>
+                    </button>
+                </div>
+
+                <!-- Zoom and Rotate Tools -->
+                <div class="tool-group">
+                    <button id="zoom-out-btn" class="btn-icon">
+                        <i class="fa-solid fa-minus"></i>
+                    </button>
+                    <button id="zoom-in-btn" class="btn-icon">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                    <button id="zoom-reset-btn" class="btn-icon text-xs font-bold">100%</button>
+                    <button id="rotate-left-btn" class="btn-icon">
+                        <i class="fa-solid fa-rotate-left"></i>
+                    </button>
+                    <button id="rotate-right-btn" class="btn-icon">
+                        <i class="fa-solid fa-rotate-right"></i>
+                    </button>
+                </div>
+
+                <!-- Other Tools -->
+                <div class="tool-group">
+                    <button id="tool-move-btn" class="btn-icon" data-tool="move">
+                        <i class="fa-solid fa-hand-paper"></i>
+                    </button>
+                    <button id="tool-rotate-btn" class="btn-icon" data-tool="rotate">
+                        <i class="fa-solid fa-rotate"></i>
+                    </button>
+                    <button id="clear-btn" class="btn-icon">
+                        <i class="fa-solid fa-trash-alt"></i>
+                    </button>
+                    <button id="save-btn" class="btn-icon">
+                        <i class="fa-solid fa-download"></i>
+                    </button>
+                    <button id="tool-layer-btn" class="btn-icon" data-tool="layer">
+                        <i class="fa-solid fa-layer-group"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Drawing Area -->
+    <div class="canvas-area">
+        <!-- Merged Canvas (for display) -->
+        <canvas id="merged-canvas" class="absolute z-10"></canvas>
+        <div class="message-box" id="message-box"></div>
+    </div>
+
+    <!-- Tool Settings Panels -->
+    <div id="tool-panel-brush" class="tool-panel active">
+        <h3 class="font-bold mb-2">Brush Settings</h3>
+        <div class="slider-container">
+            <label for="brush-size" class="text-sm w-16">Size:</label>
+            <input type="range" id="brush-size" min="1" max="50" value="10" class="flex-grow">
+            <span id="brush-size-val" class="text-sm w-8 text-right">10</span>
+        </div>
+        <div class="slider-container">
+            <label for="brush-opacity" class="text-sm w-16">Opacity:</label>
+            <input type="range" id="brush-opacity" min="0" max="100" value="100" class="flex-grow">
+            <span id="brush-opacity-val" class="text-sm w-8 text-right">100%</span>
+        </div>
+        <div class="flex items-center gap-2 mb-4">
+            <label for="color-picker" class="text-sm whitespace-nowrap">Color:</label>
+            <input type="color" id="color-picker" value="#000000" class="w-8 h-8 rounded-full border border-gray-300">
+        </div>
+        <div class="flex flex-wrap gap-2">
+            <div class="color-palette-item bg-black cursor-pointer" data-color="#000000"></div>
+            <div class="color-palette-item bg-red-500 cursor-pointer" data-color="#ef4444"></div>
+            <div class="color-palette-item bg-green-500 cursor-pointer" data-color="#22c55e"></div>
+            <div class="color-palette-item bg-blue-500 cursor-pointer" data-color="#3b82f6"></div>
+            <div class="color-palette-item bg-yellow-500 cursor-pointer" data-color="#eab308"></div>
+        </div>
+    </div>
+    
+    <div id="tool-panel-eraser" class="tool-panel">
+        <h3 class="font-bold mb-2">Eraser Settings</h3>
+        <div class="slider-container">
+            <label for="eraser-size" class="text-sm w-16">Size:</label>
+            <input type="range" id="eraser-size" min="1" max="50" value="10" class="flex-grow">
+            <span id="eraser-size-val" class="text-sm w-8 text-right">10</span>
+        </div>
+    </div>
+
+    <div id="tool-panel-fill" class="tool-panel">
+        <h3 class="font-bold mb-2">Fill Settings</h3>
+        <div class="flex items-center gap-2 mb-4">
+            <label for="fill-color-picker" class="text-sm whitespace-nowrap">Color:</label>
+            <input type="color" id="fill-color-picker" value="#ffffff" class="w-8 h-8 rounded-full border border-gray-300">
+        </div>
+    </div>
+    
+    <div id="tool-panel-finger" class="tool-panel">
+        <h3 class="font-bold mb-2">Finger Settings</h3>
+        <div class="slider-container">
+            <label for="finger-size" class="text-sm w-16">Size:</label>
+            <input type="range" id="finger-size" min="1" max="50" value="10" class="flex-grow">
+            <span id="finger-size-val" class="text-sm w-8 text-right">10</span>
+        </div>
+        <div class="slider-container">
+            <label for="finger-strength" class="text-sm w-16">Strength:</label>
+            <input type="range" id="finger-strength" min="1" max="100" value="50" class="flex-grow">
+            <span id="finger-strength-val" class="text-sm w-8 text-right">50%</span>
+        </div>
+    </div>
+</div>
+
+<!-- Layer Modal and Overlay -->
+<div id="layer-modal-overlay" class="modal-overlay">
+    <div id="layer-modal" class="layer-modal">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="font-bold">Layers</h3>
+            <div class="flex items-center gap-2">
+                <button id="layer-add" class="btn-icon text-green-500 text-base">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+                <button id="layer-remove" class="btn-icon text-red-500 text-base">
+                    <i class="fa-solid fa-trash-alt"></i>
+                </button>
+                <button id="layer-merge" class="btn-icon text-blue-500 text-base">
+                    <i class="fa-solid fa-compress-alt"></i>
+                </button>
+            </div>
+        </div>
+        <div id="layer-list-container" class="space-y-2 max-h-64 overflow-y-auto pr-2">
+            <!-- Layer items will be dynamically added here -->
+        </div>
+        <div class="mt-4 slider-container">
+            <label for="layer-opacity" class="text-sm w-16">Opacity:</label>
+            <input type="range" id="layer-opacity" min="0" max="100" value="100" class="flex-grow">
+            <span id="layer-opacity-val" class="text-sm w-8 text-right">100%</span>
+        </div>
+        <div class="slider-container">
+            <label for="blend-mode" class="text-sm w-16">Blend:</label>
+            <select id="blend-mode" class="flex-grow p-1 rounded-md border border-gray-300">
+                <option value="source-over">Normal</option>
+                <option value="multiply">Multiply</option>
+                <option value="screen">Screen</option>
+                <option value="overlay">Overlay</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // UI elements
+        const appContainer = document.querySelector('.app-container');
+        const canvasArea = document.querySelector('.canvas-area');
+        const mergedCanvas = document.getElementById('merged-canvas');
+        const mergedCtx = mergedCanvas.getContext('2d');
+        const messageBox = document.getElementById('message-box');
+
+        // Top bar tool buttons
+        const topToolButtons = document.querySelectorAll('.top-tools .btn-icon[data-tool]');
+        
+        // Tool panels
+        const toolPanels = document.querySelectorAll('.tool-panel');
+        const brushPanel = document.getElementById('tool-panel-brush');
+        const eraserPanel = document.getElementById('tool-panel-eraser');
+        const fillPanel = document.getElementById('tool-panel-fill');
+        const fingerPanel = document.getElementById('tool-panel-finger');
+        
+        // Brush settings
+        const brushSizeSlider = document.getElementById('brush-size');
+        const brushSizeVal = document.getElementById('brush-size-val');
+        const brushOpacitySlider = document.getElementById('brush-opacity');
+        const brushOpacityVal = document.getElementById('brush-opacity-val');
+        const colorPicker = document.getElementById('color-picker');
+        const palette = document.querySelector('.flex-wrap');
+
+        // Eraser settings
+        const eraserSizeSlider = document.getElementById('eraser-size');
+        const eraserSizeVal = document.getElementById('eraser-size-val');
+
+        // Fill settings
+        const fillColorPicker = document.getElementById('fill-color-picker');
+
+        // Finger settings
+        const fingerSizeSlider = document.getElementById('finger-size');
+        const fingerSizeVal = document.getElementById('finger-size-val');
+        const fingerStrengthSlider = document.getElementById('finger-strength');
+        const fingerStrengthVal = document.getElementById('finger-strength-val');
+
+        // Top bar buttons
+        const zoomInBtn = document.getElementById('zoom-in-btn');
+        const zoomOutBtn = document.getElementById('zoom-out-btn');
+        const zoomResetBtn = document.getElementById('zoom-reset-btn');
+        const rotateLeftBtn = document.getElementById('rotate-left-btn');
+        const rotateRightBtn = document.getElementById('rotate-right-btn');
+        const undoBtn = document.getElementById('undo-btn');
+        const redoBtn = document.getElementById('redo-btn');
+        const clearBtn = document.getElementById('clear-btn');
+        const saveBtn = document.getElementById('save-btn');
+        const layerToolBtn = document.getElementById('tool-layer-btn');
+        const rotateToolBtn = document.getElementById('tool-rotate-btn');
+        
+        // Layer modal
+        const layerModalOverlay = document.getElementById('layer-modal-overlay');
+        const layerModal = document.getElementById('layer-modal');
+        const layerListContainer = document.getElementById('layer-list-container');
+        const layerAddBtn = document.getElementById('layer-add');
+        const layerRemoveBtn = document.getElementById('layer-remove');
+        const layerMergeBtn = document.getElementById('layer-merge');
+        const layerOpacitySlider = document.getElementById('layer-opacity');
+        const layerOpacityVal = document.getElementById('layer-opacity-val');
+        const blendModeSelect = document.getElementById('blend-mode');
+        
+        // State variables
+        let activeTool = 'brush';
+        let isDrawing = false;
+        let isMoving = false;
+        let isRotating = false;
+        let lastX = 0;
+        let lastY = 0;
+        let layers = [];
+        let activeLayerIndex = -1;
+        let history = [];
+        let historyIndex = -1;
+        let currentScale = 1.0;
+        let panX = 0;
+        let panY = 0;
+        let currentRotation = 0;
+
+        // Multi-touch state variables
+        let isPinching = false;
+        let initialDistance = 0;
+        let initialAngle = 0;
+        let initialMidpoint = { x: 0, y: 0 };
+        
+        // Show a message to the user
+        function showMessage(text) {
+            messageBox.textContent = text;
+            messageBox.classList.add('show');
+            setTimeout(() => {
+                messageBox.classList.remove('show');
+            }, 2000);
+        }
+
+        // Adjust canvas size
+        function resizeCanvas() {
+            const rect = canvasArea.getBoundingClientRect();
+            const width = rect.width;
+            const height = rect.height;
+            
+            mergedCanvas.width = width;
+            mergedCanvas.height = height;
+
+            layers.forEach(layer => {
+                layer.canvas.width = width;
+                layer.canvas.height = height;
+                redrawLayer(layer);
+            });
+            redrawMergedCanvas();
+        }
+        
+        // Create a new layer
+        function createLayer() {
+            const canvas = document.createElement('canvas');
+            canvas.classList.add('absolute', 'canvas-layer');
+            const rect = canvasArea.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            const ctx = canvas.getContext('2d');
+            
+            const layer = { 
+                canvas, 
+                ctx, 
+                visible: true, 
+                data: [],
+                opacity: 1,
+                blendMode: 'source-over'
+            };
+            layers.unshift(layer);
+            canvasArea.appendChild(canvas);
+
+            // Fill the first layer with white, subsequent layers are transparent
+            if (layers.length === 1) {
+                 fillLayerWithColor(layer, '#ffffff');
+            }
+            
+            updateActiveLayer(0);
+            showMessage(`レイヤー${layers.length}を追加`);
+        }
+
+        // Fill a specific layer with a color
+        function fillLayerWithColor(layer, color) {
+            layer.ctx.fillStyle = color;
+            layer.ctx.fillRect(0, 0, layer.canvas.width, layer.canvas.height);
+            layer.data = [{ type: 'fill', color: color }];
+            addHistory({ type: 'fill', layerIndex: layers.indexOf(layer) });
+            redrawMergedCanvas();
+        }
+
+        // Update active layer
+        function updateActiveLayer(index) {
+            layers.forEach((layer, i) => {
+                layer.canvas.classList.add('hidden');
+                layer.canvas.style.zIndex = i;
+            });
+            activeLayerIndex = index;
+            if (layers[activeLayerIndex]) {
+                layers[activeLayerIndex].canvas.classList.remove('hidden');
+                layers[activeLayerIndex].canvas.style.zIndex = layers.length;
+            }
+            redrawMergedCanvas();
+            updateLayerListUI();
+            updateModalControls();
+        }
+
+        // Update layer list UI
+        function updateLayerListUI() {
+            layerListContainer.innerHTML = '';
+            layers.forEach((layer, index) => {
+                const layerItem = document.createElement('div');
+                layerItem.classList.add('layer-item');
+                if (index === activeLayerIndex) {
+                    layerItem.classList.add('active');
+                }
+                
+                // Thumbnail
+                const thumbnailCanvas = document.createElement('canvas');
+                thumbnailCanvas.classList.add('layer-thumbnail');
+                thumbnailCanvas.width = 80;
+                thumbnailCanvas.height = 80;
+                const thumbnailCtx = thumbnailCanvas.getContext('2d');
+                thumbnailCtx.drawImage(layer.canvas, 0, 0, 80, 80);
+
+                // Layer name and visibility toggle
+                const layerControls = document.createElement('div');
+                layerControls.classList.add('flex', 'flex-col', 'flex-grow');
+                layerControls.innerHTML = `
+                    <span class="font-semibold text-sm">Layer ${layers.length - index}</span>
+                    <span class="text-xs text-gray-500">${layer.blendMode.toUpperCase()}</span>
+                `;
+
+                const visibilityBtn = document.createElement('button');
+                visibilityBtn.classList.add('btn-icon', 'text-gray-500', 'text-base');
+                visibilityBtn.innerHTML = `<i class="fa-solid fa-eye${layer.visible ? '' : '-slash'}"></i>`;
+
+                visibilityBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    layer.visible = !layer.visible;
+                    redrawMergedCanvas();
+                    updateLayerListUI();
+                });
+
+                layerItem.appendChild(thumbnailCanvas);
+                layerItem.appendChild(layerControls);
+                layerItem.appendChild(visibilityBtn);
+                
+                layerItem.addEventListener('click', () => {
+                    updateActiveLayer(index);
+                });
+
+                layerListContainer.appendChild(layerItem);
+            });
+        }
+        
+        // Update layer modal controls
+        function updateModalControls() {
+            if (activeLayerIndex === -1 || !layers[activeLayerIndex]) {
+                layerOpacitySlider.value = 100;
+                layerOpacityVal.textContent = '100%';
+                blendModeSelect.value = 'source-over';
+                return;
+            }
+            const activeLayer = layers[activeLayerIndex];
+            layerOpacitySlider.value = activeLayer.opacity * 100;
+            layerOpacityVal.textContent = `${Math.round(activeLayer.opacity * 100)}%`;
+            blendModeSelect.value = activeLayer.blendMode;
+        }
+
+        // History management
+        function addHistory(action) {
+            if (history.length > historyIndex + 1) {
+                history = history.slice(0, historyIndex + 1);
+            }
+            history.push(action);
+            historyIndex++;
+        }
+
+        function undo() {
+            if (historyIndex > -1) {
+                const action = history[historyIndex];
+                if (action.type === 'draw' || action.type === 'erase' || action.type === 'fill' || action.type === 'finger') {
+                    const layer = layers[action.layerIndex];
+                    layer.data.pop();
+                    redrawLayer(layer);
+                    redrawMergedCanvas();
+                }
+                historyIndex--;
+                showMessage('Undo');
+            }
+        }
+        
+        function redo() {
+            if (historyIndex < history.length - 1) {
+                historyIndex++;
+                const action = history[historyIndex];
+                if (action.type === 'draw' || action.type === 'erase' || action.type === 'fill' || action.type === 'finger') {
+                    const layer = layers[action.layerIndex];
+                    redrawLayer(layer);
+                    redrawMergedCanvas();
+                }
+                showMessage('Redo');
+            }
+        }
+
+        // Redraw a layer from its data
+        function redrawLayer(layer) {
+            layer.ctx.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
+            layer.data.forEach(action => {
+                if (action.type === 'line') {
+                    layer.ctx.beginPath();
+                    layer.ctx.moveTo(action.x1, action.y1);
+                    layer.ctx.lineTo(action.x2, action.y2);
+                    layer.ctx.lineWidth = action.width;
+                    layer.ctx.strokeStyle = action.color;
+                    layer.ctx.globalAlpha = action.alpha;
+                    layer.ctx.globalCompositeOperation = action.mode === 'erase' ? 'destination-out' : 'source-over';
+                    layer.ctx.stroke();
+                } else if (action.type === 'fill') {
+                    layer.ctx.fillStyle = action.color;
+                    layer.ctx.fillRect(0, 0, layer.canvas.width, layer.canvas.height);
+                }
+            });
+            layer.ctx.globalAlpha = 1;
+            layer.ctx.globalCompositeOperation = 'source-over';
+        }
+
+        // Redraw all layers onto the merged canvas
+        function redrawMergedCanvas() {
+            mergedCtx.clearRect(0, 0, mergedCanvas.width, mergedCanvas.height);
+            
+            layers.slice().reverse().forEach(layer => {
+                if (layer.visible) {
+                    mergedCtx.globalAlpha = layer.opacity;
+                    mergedCtx.globalCompositeOperation = layer.blendMode;
+                    mergedCtx.drawImage(layer.canvas, 0, 0);
+                }
+            });
+            
+            mergedCtx.globalAlpha = 1;
+            mergedCtx.globalCompositeOperation = 'source-over';
+            updateLayerListUI();
+        }
+        
+        // Update zoom, pan, and rotation and apply to canvases
+        function updateTransform() {
+            const transform = `translate(${panX}px, ${panY}px) scale(${currentScale}) rotate(${currentRotation}deg)`;
+            layers.forEach(layer => {
+                layer.canvas.style.transform = transform;
+            });
+            mergedCanvas.style.transform = transform;
+            
+            showMessage(`Zoom: ${Math.round(currentScale * 100)}% | Rotation: ${Math.round(currentRotation)}°`);
+        }
+
+        // Start drawing or other actions
+        function startDrawing(e) {
+            e.preventDefault();
+
+            if (e.touches && e.touches.length === 2) {
+                isPinching = true;
+                const touch1 = e.touches[0];
+                const touch2 = e.touches[1];
+
+                initialDistance = Math.hypot(touch2.pageX - touch1.pageX, touch2.pageY - touch1.pageY);
+                initialAngle = Math.atan2(touch2.pageY - touch1.pageY, touch2.pageX - touch1.pageX) * 180 / Math.PI;
+
+                initialMidpoint.x = (touch1.pageX + touch2.pageX) / 2;
+                initialMidpoint.y = (touch1.pageY + touch2.pageY) / 2;
+                return;
+            }
+
+            if (activeTool === 'move') {
+                isMoving = true;
+                [lastX, lastY] = getScreenCoordinates(e);
+                return;
+            }
+            
+            if (activeTool === 'rotate') {
+                isRotating = true;
+                [lastX, lastY] = getScreenCoordinates(e);
+                return;
+            }
+
+            if (activeTool === 'eyedropper') {
+                pickColor(e);
+                return;
+            }
+            
+            if (activeTool === 'fill') {
+                const { layer, ctx } = getActiveLayerAndContext();
+                if (!layer || !ctx) return;
+                ctx.fillStyle = fillColorPicker.value;
+                ctx.fillRect(0, 0, layer.canvas.width, layer.canvas.height);
+                layer.data.push({ type: 'fill', color: fillColorPicker.value });
+                addHistory({ type: 'fill', layerIndex: activeLayerIndex });
+                redrawMergedCanvas();
+                return;
+            }
+            
+            const { layer, ctx } = getActiveLayerAndContext();
+            if (!layer || !ctx) return;
+            
+            isDrawing = true;
+            [lastX, lastY] = getCanvasCoordinates(e);
+        }
+        
+        // Drawing or other actions
+        function draw(e) {
+            e.preventDefault();
+
+            if (isPinching && e.touches.length === 2) {
+                const touch1 = e.touches[0];
+                const touch2 = e.touches[1];
+                const newDistance = Math.hypot(touch2.pageX - touch1.pageX, touch2.pageY - touch1.pageY);
+                const newAngle = Math.atan2(touch2.pageY - touch1.pageY, touch2.pageX - touch1.pageX) * 180 / Math.PI;
+
+                const newScale = (currentScale / initialDistance) * newDistance;
+                currentScale = Math.min(Math.max(0.2, newScale), 5.0);
+                
+                const angleChange = newAngle - initialAngle;
+                currentRotation += angleChange;
+                initialAngle = newAngle;
+                
+                const newMidpoint = {
+                    x: (touch1.pageX + touch2.pageX) / 2,
+                    y: (touch1.pageY + touch2.pageY) / 2
+                };
+                panX += (newMidpoint.x - initialMidpoint.x);
+                panY += (newMidpoint.y - initialMidpoint.y);
+                initialMidpoint = newMidpoint;
+                
+                initialDistance = newDistance;
+                updateTransform();
+                return;
+            }
+            
+            if (activeTool === 'move') {
+                if (!isMoving) return;
+                const [x, y] = getScreenCoordinates(e);
+                const dx = x - lastX;
+                const dy = y - lastY;
+                panX += dx;
+                panY += dy;
+                [lastX, lastY] = [x, y];
+                updateTransform();
+                return;
+            }
+
+            if (activeTool === 'rotate') {
+                if (!isRotating) return;
+                const [x, y] = getScreenCoordinates(e);
+                const rotationSpeed = 0.1;
+                const dx = x - lastX;
+                currentRotation += dx * rotationSpeed;
+                [lastX, lastY] = [x, y];
+                updateTransform();
+                return;
+            }
+            
+            if (!isDrawing || activeTool === 'fill' || activeTool === 'eyedropper') return;
+            const { layer, ctx } = getActiveLayerAndContext();
+            if (!layer || !ctx) return;
+
+            const [x, y] = getCanvasCoordinates(e);
+
+            if (activeTool === 'finger') {
+                const strength = fingerStrengthSlider.value / 100;
+                const radius = fingerSizeSlider.value / currentScale;
+                const imageData = ctx.getImageData(0, 0, layer.canvas.width, layer.canvas.height);
+                
+                for (let i = 0; i < 20; i++) {
+                    const sourceX = x + (Math.random() - 0.5) * radius * 2;
+                    const sourceY = y + (Math.random() - 0.5) * radius * 2;
+                    const destX = x + (Math.random() - 0.5) * radius * 2;
+                    const destY = y + (Math.random() - 0.5) * radius * 2;
+
+                    const sourcePixel = getPixel(imageData, sourceX, sourceY);
+                    const destPixel = getPixel(imageData, destX, destY);
+
+                    if (sourcePixel && destPixel) {
+                        const newPixel = {
+                            r: destPixel.r + (sourcePixel.r - destPixel.r) * strength,
+                            g: destPixel.g + (sourcePixel.g - destPixel.g) * strength,
+                            b: destPixel.b + (sourcePixel.b - destPixel.b) * strength,
+                            a: destPixel.a + (sourcePixel.a - destPixel.a) * strength,
+                        };
+                        setPixel(imageData, destX, destY, newPixel);
+                    }
+                }
+                
+                ctx.putImageData(imageData, 0, 0);
+                layer.data.push({
+                    type: 'finger',
+                    x, y,
+                    radius,
+                    strength
+                });
+            } else {
+                ctx.beginPath();
+                ctx.moveTo(lastX, lastY);
+                ctx.lineTo(x, y);
+
+                if (activeTool === 'eraser') {
+                    ctx.globalCompositeOperation = 'destination-out';
+                    ctx.lineWidth = eraserSizeSlider.value / currentScale;
+                    ctx.strokeStyle = '#FFFFFF';
+                } else {
+                    ctx.globalCompositeOperation = 'source-over';
+                    ctx.lineWidth = brushSizeSlider.value / currentScale;
+                    ctx.strokeStyle = colorPicker.value;
+                    ctx.globalAlpha = brushOpacitySlider.value / 100;
+                }
+                
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.stroke();
+
+                layer.data.push({
+                    type: 'line',
+                    x1: lastX,
+                    y1: lastY,
+                    x2: x,
+                    y2: y,
+                    width: ctx.lineWidth,
+                    color: ctx.strokeStyle,
+                    alpha: ctx.globalAlpha,
+                    mode: activeTool
+                });
+            }
+
+            [lastX, lastY] = [x, y];
+
+            redrawMergedCanvas();
+        }
+        
+        // Helper to get pixel data from ImageData
+        function getPixel(imageData, x, y) {
+            x = Math.floor(x);
+            y = Math.floor(y);
+            if (x < 0 || x >= imageData.width || y < 0 || y >= imageData.height) {
+                return null;
+            }
+            const index = (y * imageData.width + x) * 4;
+            return {
+                r: imageData.data[index],
+                g: imageData.data[index + 1],
+                b: imageData.data[index + 2],
+                a: imageData.data[index + 3]
+            };
+        }
+
+        // Helper to set pixel data in ImageData
+        function setPixel(imageData, x, y, color) {
+            x = Math.floor(x);
+            y = Math.floor(y);
+            const index = (y * imageData.width + x) * 4;
+            imageData.data[index] = color.r;
+            imageData.data[index + 1] = color.g;
+            imageData.data[index + 2] = color.b;
+            imageData.data[index + 3] = color.a;
+        }
+
+        // Stop drawing or other actions
+        function stopDrawing(e) {
+            if (isPinching) {
+                isPinching = false;
+                initialDistance = 0;
+                return;
+            }
+            
+            if (isDrawing) {
+                if (activeTool === 'finger') {
+                    addHistory({ type: 'finger', layerIndex: activeLayerIndex });
+                } else {
+                    addHistory({ type: 'draw', layerIndex: activeLayerIndex });
+                }
+                redrawMergedCanvas();
+            }
+            isDrawing = false;
+            isMoving = false;
+            isRotating = false;
+        }
+
+        // Eyedropper tool
+        function pickColor(e) {
+            const [x, y] = getCanvasCoordinates(e);
+            try {
+                const pixelData = mergedCtx.getImageData(x, y, 1, 1).data;
+                const r = pixelData[0];
+                const g = pixelData[1];
+                const b = pixelData[2];
+                const hexColor = '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+                
+                colorPicker.value = hexColor;
+                document.getElementById('tool-brush-btn').click();
+                showMessage(`Picked color: ${hexColor}`);
+            } catch (error) {
+                showMessage('Failed to pick color');
+                console.error('Failed to pick color:', error);
+            }
+        }
+        
+        // Get screen coordinates
+        function getScreenCoordinates(e) {
+            let x, y;
+            if (e.touches) {
+                x = e.touches[0].clientX;
+                y = e.touches[0].clientY;
+            } else {
+                x = e.clientX;
+                y = e.clientY;
+            }
+            return [x, y];
+        }
+
+        // Get canvas coordinates
+        function getCanvasCoordinates(e) {
+            const areaRect = canvasArea.getBoundingClientRect();
+            
+            let x, y;
+            if (e.touches) {
+                x = e.touches[0].clientX;
+                y = e.touches[0].clientY;
+            } else {
+                x = e.clientX;
+                y = e.clientY;
+            }
+            
+            const relativeX = x - areaRect.left - areaRect.width / 2;
+            const relativeY = y - areaRect.top - areaRect.height / 2;
+
+            const unPannedX = relativeX - panX;
+            const unPannedY = relativeY - panY;
+
+            const rad = -currentRotation * Math.PI / 180;
+            const cos = Math.cos(rad);
+            const sin = Math.sin(rad);
+            const unRotatedX = unPannedX * cos - unPannedY * sin;
+            const unRotatedY = unPannedX * sin + unPannedY * cos;
+            
+            const unScaledX = unRotatedX / currentScale;
+            const unScaledY = unRotatedY / currentScale;
+
+            const finalX = unScaledX + mergedCanvas.width / 2;
+            const finalY = unScaledY + mergedCanvas.height / 2;
+            
+            return [finalX, finalY];
+        }
+
+        // Get active layer and context
+        function getActiveLayerAndContext() {
+            if (activeLayerIndex === -1) {
+                showMessage('Please add a layer first');
+                return { layer: null, ctx: null };
+            }
+            const layer = layers[activeLayerIndex];
+            const ctx = layer.ctx;
+            return { layer, ctx };
+        }
+        
+        // Event listeners
+        window.addEventListener('resize', resizeCanvas);
+
+        topToolButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                topToolButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                toolPanels.forEach(p => p.classList.remove('active'));
+                layerModalOverlay.classList.remove('open');
+                
+                activeTool = btn.dataset.tool;
+
+                switch(activeTool) {
+                    case 'brush':
+                        brushPanel.classList.add('active');
+                        showMessage('Brush tool selected');
+                        break;
+                    case 'eraser':
+                        eraserPanel.classList.add('active');
+                        showMessage('Eraser tool selected');
+                        break;
+                    case 'fill':
+                        fillPanel.classList.add('active');
+                        showMessage('Fill tool selected');
+                        break;
+                    case 'eyedropper':
+                        showMessage('Eyedropper tool selected');
+                        break;
+                    case 'move':
+                        showMessage('Move tool selected');
+                        break;
+                    case 'rotate':
+                        showMessage('Rotate tool selected');
+                        break;
+                    case 'finger':
+                        fingerPanel.classList.add('active');
+                        showMessage('Finger tool selected');
+                        break;
+                }
+            });
+        });
+
+        // Close tool panels on outside click/tap
+        function closeToolPanels() {
+            toolPanels.forEach(p => {
+                if (p.classList.contains('active')) {
+                    p.classList.remove('active');
+                }
+            });
+        }
+        canvasArea.addEventListener('mousedown', closeToolPanels);
+        canvasArea.addEventListener('touchstart', closeToolPanels);
+        toolPanels.forEach(p => {
+            p.addEventListener('mousedown', (e) => e.stopPropagation());
+            p.addEventListener('touchstart', (e) => e.stopPropagation());
+        });
+
+        layerToolBtn.addEventListener('click', () => {
+            layerModalOverlay.classList.add('open');
+            layerModal.classList.add('open');
+            updateLayerListUI();
+            showMessage('Layer panel opened');
+        });
+
+        layerModalOverlay.addEventListener('click', (e) => {
+            if (e.target.id === 'layer-modal-overlay') {
+                layerModal.classList.remove('open');
+                layerModalOverlay.classList.remove('open');
+            }
+        });
+
+        // Update slider values
+        brushSizeSlider.addEventListener('input', (e) => { brushSizeVal.textContent = e.target.value; });
+        brushOpacitySlider.addEventListener('input', (e) => { brushOpacityVal.textContent = `${e.target.value}%`; });
+        eraserSizeSlider.addEventListener('input', (e) => { eraserSizeVal.textContent = e.target.value; });
+        fingerSizeSlider.addEventListener('input', (e) => { fingerSizeVal.textContent = e.target.value; });
+        fingerStrengthSlider.addEventListener('input', (e) => { fingerStrengthVal.textContent = `${e.target.value}%`; });
+        
+        layerOpacitySlider.addEventListener('input', (e) => {
+            if (activeLayerIndex !== -1) {
+                layers[activeLayerIndex].opacity = e.target.value / 100;
+                layerOpacityVal.textContent = `${e.target.value}%`;
+                redrawMergedCanvas();
+            }
+        });
+
+        // Color palette
+        palette.addEventListener('click', (e) => {
+            const color = e.target.dataset.color;
+            if (color) {
+                colorPicker.value = color;
+                showMessage(`Color picked: ${color}`);
+            }
+        });
+
+        // Layer controls
+        layerAddBtn.addEventListener('click', () => {
+            createLayer();
+            layerModal.classList.add('open');
+        });
+
+        layerRemoveBtn.addEventListener('click', () => {
+            if (layers.length > 1 && activeLayerIndex !== -1) {
+                layers[activeLayerIndex].canvas.remove();
+                layers.splice(activeLayerIndex, 1);
+                activeLayerIndex = Math.min(activeLayerIndex, layers.length - 1);
+                updateActiveLayer(activeLayerIndex);
+                showMessage('Layer deleted');
+            } else {
+                showMessage('Cannot delete the last layer');
+            }
+        });
+
+        layerMergeBtn.addEventListener('click', () => {
+            if (layers.length > 1 && activeLayerIndex !== layers.length - 1) {
+                const activeLayer = layers[activeLayerIndex];
+                const belowLayer = layers[activeLayerIndex + 1];
+
+                belowLayer.ctx.globalCompositeOperation = activeLayer.blendMode;
+                belowLayer.ctx.globalAlpha = activeLayer.opacity;
+                belowLayer.ctx.drawImage(activeLayer.canvas, 0, 0);
+                belowLayer.ctx.globalCompositeOperation = 'source-over';
+                belowLayer.ctx.globalAlpha = 1;
+
+                layers[activeLayerIndex].canvas.remove();
+                layers.splice(activeLayerIndex, 1);
+                updateActiveLayer(activeLayerIndex);
+                showMessage('Layers merged');
+            } else {
+                showMessage('Cannot merge');
+            }
+        });
+
+        blendModeSelect.addEventListener('change', (e) => {
+            if (activeLayerIndex !== -1) {
+                layers[activeLayerIndex].blendMode = e.target.value;
+                redrawMergedCanvas();
+                showMessage(`Blend mode: ${e.target.value}`);
+            }
+        });
+
+        // Top bar button events
+        zoomInBtn.addEventListener('click', () => {
+            currentScale = Math.min(3.0, currentScale + 0.2);
+            updateTransform();
+        });
+        zoomOutBtn.addEventListener('click', () => {
+            currentScale = Math.max(0.2, currentScale - 0.2);
+            updateTransform();
+        });
+        zoomResetBtn.addEventListener('click', () => {
+            currentScale = 1.0;
+            panX = 0;
+            panY = 0;
+            currentRotation = 0;
+            updateTransform();
+        });
+        
+        rotateLeftBtn.addEventListener('click', () => {
+            currentRotation -= 5;
+            updateTransform();
+        });
+        
+        rotateRightBtn.addEventListener('click', () => {
+            currentRotation += 5;
+            updateTransform();
+        });
+        
+        undoBtn.addEventListener('click', () => undo());
+        redoBtn.addEventListener('click', () => redo());
+        clearBtn.addEventListener('click', () => {
+            const { layer, ctx } = getActiveLayerAndContext();
+            if (layer && ctx) {
+                ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+                layer.data = [];
+                fillLayerWithColor(layer, '#ffffff');
+                showMessage('Canvas cleared');
+            }
+        });
+        saveBtn.addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.download = 'my-koto-drawing.png';
+            link.href = mergedCanvas.toDataURL('image/png');
+            link.click();
+            showMessage('Image saved');
+        });
+
+        // Drawing events
+        mergedCanvas.addEventListener('mousedown', startDrawing);
+        mergedCanvas.addEventListener('touchstart', startDrawing);
+        mergedCanvas.addEventListener('mousemove', draw);
+        mergedCanvas.addEventListener('touchmove', draw);
+        mergedCanvas.addEventListener('mouseup', stopDrawing);
+        mergedCanvas.addEventListener('touchend', stopDrawing);
+        mergedCanvas.addEventListener('mouseout', stopDrawing);
+
+        // Initialize
+        createLayer();
+        resizeCanvas();
+    });
+</script>
+
+</body>
+</html>
